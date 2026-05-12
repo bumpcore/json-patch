@@ -13,6 +13,14 @@ use stdClass;
 
 /**
  * Applies RFC 6902 JSON Patch documents to JSON-like PHP values.
+ *
+ * @phpstan-type JsonScalar bool|int|float|string|null
+ * @phpstan-type JsonArray list<mixed>
+ * @phpstan-type JsonObject array<string|int, mixed>|stdClass
+ * @phpstan-type JsonValue JsonScalar|JsonArray|JsonObject
+ * @phpstan-type JsonPatchArrayOperation array<string|int, mixed>
+ * @phpstan-type JsonPatchOperation JsonPatchArrayOperation|stdClass
+ * @phpstan-type JsonPatchDocument list<JsonPatchOperation>
  */
 final class JsonPatch
 {
@@ -26,16 +34,15 @@ final class JsonPatch
      * numeric object keys need to be preserved exactly from JSON text.
      *
      * @param array<mixed> $patch
+     *
+     * @return mixed JSON values may change type when a patch targets the root.
      */
     public static function apply(mixed $document, array $patch): mixed
     {
-        if (! array_is_list($patch)) {
-            throw new InvalidPatchException('A JSON Patch document must be an array of operations.');
-        }
-
+        $patchOperations = self::patchOperations($patch);
         $workingDocument = self::deepCopy($document);
 
-        foreach ($patch as $index => $operation) {
+        foreach ($patchOperations as $index => $operation) {
             $workingDocument = self::applyOperation($workingDocument, $operation, $index);
         }
 
@@ -63,14 +70,41 @@ final class JsonPatch
     }
 
     /**
-     * Dispatches one validated operation object by its op member.
+     * Validates the top-level JSON Patch document shape.
+     *
+     * @param array<mixed> $patch
+     *
+     * @phpstan-return JsonPatchDocument
      */
-    private static function applyOperation(mixed $document, mixed $operation, int $index): mixed
+    private static function patchOperations(array $patch): array
     {
-        if (! is_array($operation) && ! $operation instanceof stdClass) {
-            throw new InvalidPatchException(sprintf('Operation %d must be an object.', $index));
+        if (! array_is_list($patch)) {
+            throw new InvalidPatchException('A JSON Patch document must be an array of operations.');
         }
 
+        $operations = [];
+
+        foreach ($patch as $index => $operation) {
+            if (! is_array($operation) && ! $operation instanceof stdClass) {
+                throw new InvalidPatchException(sprintf('Operation %d must be an object.', $index));
+            }
+
+            $operations[] = $operation;
+        }
+
+        return $operations;
+    }
+
+    /**
+     * Dispatches one validated operation object by its op member.
+     *
+     * @phpstan-param JsonValue $document
+     * @phpstan-param JsonPatchOperation $operation
+     *
+     * @phpstan-return JsonValue
+     */
+    private static function applyOperation(mixed $document, array|stdClass $operation, int $index): mixed
+    {
         $op = self::operationMember($operation, 'op', $index);
         $path = JsonPointer::fromString(self::operationMember($operation, 'path', $index));
 
@@ -88,7 +122,7 @@ final class JsonPatch
     /**
      * Reads a required string member from an operation object.
      *
-     * @param array<mixed, mixed>|stdClass $operation
+     * @phpstan-param JsonPatchOperation $operation
      */
     private static function operationMember(array|stdClass $operation, string $name, int $index): string
     {
@@ -108,7 +142,9 @@ final class JsonPatch
     /**
      * Reads a required JSON value member from an operation object.
      *
-     * @param array<mixed, mixed>|stdClass $operation
+     * @phpstan-param JsonPatchOperation $operation
+     *
+     * @phpstan-return JsonValue
      */
     private static function operationValue(array|stdClass $operation, string $name, int $index): mixed
     {
@@ -122,7 +158,7 @@ final class JsonPatch
     /**
      * Reports whether an operation object contains a member.
      *
-     * @param array<mixed, mixed>|stdClass $operation
+     * @phpstan-param JsonPatchOperation $operation
      */
     private static function hasMember(array|stdClass $operation, string $name): bool
     {
@@ -136,7 +172,7 @@ final class JsonPatch
     /**
      * Reads a member from an operation object after existence is known.
      *
-     * @param array<mixed, mixed>|stdClass $operation
+     * @phpstan-param JsonPatchOperation $operation
      */
     private static function readMember(array|stdClass $operation, string $name): mixed
     {
@@ -149,6 +185,11 @@ final class JsonPatch
 
     /**
      * Applies the add operation.
+     *
+     * @phpstan-param JsonValue $document
+     * @phpstan-param JsonValue $value
+     *
+     * @phpstan-return JsonValue
      */
     private static function add(mixed $document, JsonPointer $path, mixed $value): mixed
     {
@@ -157,6 +198,10 @@ final class JsonPatch
 
     /**
      * Applies the remove operation.
+     *
+     * @phpstan-param JsonValue $document
+     *
+     * @phpstan-return JsonArray|JsonObject|null
      */
     private static function remove(mixed $document, JsonPointer $path): mixed
     {
@@ -165,6 +210,11 @@ final class JsonPatch
 
     /**
      * Applies the replace operation.
+     *
+     * @phpstan-param JsonValue $document
+     * @phpstan-param JsonValue $value
+     *
+     * @phpstan-return JsonValue
      */
     private static function replace(mixed $document, JsonPointer $path, mixed $value): mixed
     {
@@ -175,6 +225,10 @@ final class JsonPatch
 
     /**
      * Applies the move operation.
+     *
+     * @phpstan-param JsonValue $document
+     *
+     * @phpstan-return JsonValue
      */
     private static function move(mixed $document, JsonPointer $from, JsonPointer $path): mixed
     {
@@ -190,6 +244,10 @@ final class JsonPatch
 
     /**
      * Applies the copy operation.
+     *
+     * @phpstan-param JsonValue $document
+     *
+     * @phpstan-return JsonValue
      */
     private static function copy(mixed $document, JsonPointer $from, JsonPointer $path): mixed
     {
@@ -198,6 +256,11 @@ final class JsonPatch
 
     /**
      * Applies the test operation.
+     *
+     * @phpstan-param JsonValue $document
+     * @phpstan-param JsonValue $expected
+     *
+     * @phpstan-return JsonValue
      */
     private static function test(mixed $document, JsonPointer $path, mixed $expected): mixed
     {
@@ -214,6 +277,11 @@ final class JsonPatch
      * Adds a value at the provided token path.
      *
      * @param list<string> $tokens
+     *
+     * @phpstan-param JsonValue $target
+     * @phpstan-param JsonValue $value
+     *
+     * @phpstan-return JsonValue
      */
     private static function addAt(mixed $target, array $tokens, mixed $value): mixed
     {
@@ -249,6 +317,10 @@ final class JsonPatch
      * Removes a value at the provided token path.
      *
      * @param list<string> $tokens
+     *
+     * @phpstan-param JsonValue $target
+     *
+     * @phpstan-return JsonArray|JsonObject|null
      */
     private static function removeAt(mixed $target, array $tokens): mixed
     {
@@ -285,6 +357,11 @@ final class JsonPatch
      * Replaces a value at the provided token path.
      *
      * @param list<string> $tokens
+     *
+     * @phpstan-param JsonValue $target
+     * @phpstan-param JsonValue $value
+     *
+     * @phpstan-return JsonValue
      */
     private static function replaceAt(mixed $target, array $tokens, mixed $value): mixed
     {
@@ -306,6 +383,10 @@ final class JsonPatch
 
     /**
      * Reads the value addressed by a pointer.
+     *
+     * @phpstan-param JsonValue $document
+     *
+     * @phpstan-return JsonValue
      */
     private static function valueAt(mixed $document, JsonPointer $path): mixed
     {
@@ -320,11 +401,15 @@ final class JsonPatch
 
     /**
      * Reads one child from a JSON array or object container.
+     *
+     * @phpstan-param JsonValue $target
+     *
+     * @phpstan-return JsonValue
      */
     private static function childValue(mixed $target, string $token): mixed
     {
         if (self::isJsonArray($target)) {
-            return $target[self::arrayIndexForExistingValue($target, $token)];
+            return self::deepCopy($target[self::arrayIndexForExistingValue($target, $token)]);
         }
 
         if (self::isJsonObject($target)) {
@@ -338,6 +423,11 @@ final class JsonPatch
 
     /**
      * Replaces one child in a JSON array or object container.
+     *
+     * @phpstan-param JsonValue $target
+     * @phpstan-param JsonValue $value
+     *
+     * @phpstan-return JsonArray|JsonObject
      */
     private static function replaceChild(mixed $target, string $token, mixed $value): mixed
     {
@@ -360,7 +450,7 @@ final class JsonPatch
     /**
      * Reports whether a PHP value should be treated as a JSON array.
      *
-     * @phpstan-assert-if-true list<mixed> $value
+     * @phpstan-assert-if-true JsonArray $value
      */
     private static function isJsonArray(mixed $value): bool
     {
@@ -370,7 +460,7 @@ final class JsonPatch
     /**
      * Reports whether a PHP value should be treated as a JSON object.
      *
-     * @phpstan-assert-if-true array<string|int, mixed>|stdClass $value
+     * @phpstan-assert-if-true JsonObject $value
      */
     private static function isJsonObject(mixed $value): bool
     {
@@ -380,7 +470,7 @@ final class JsonPatch
     /**
      * Resolves an array index for add, where "-" means append.
      *
-     * @param list<mixed> $array
+     * @phpstan-param JsonArray $array
      */
     private static function arrayIndexForAdd(array $array, string $token): int
     {
@@ -400,7 +490,7 @@ final class JsonPatch
     /**
      * Resolves an array index that must already exist.
      *
-     * @param list<mixed> $array
+     * @phpstan-param JsonArray $array
      */
     private static function arrayIndexForExistingValue(array $array, string $token): int
     {
@@ -432,7 +522,7 @@ final class JsonPatch
     /**
      * Ensures an object member exists before read, replace, or removal.
      *
-     * @param array<string|int, mixed>|stdClass $object
+     * @phpstan-param JsonObject $object
      */
     private static function assertObjectMemberExists(array|stdClass $object, string $member): void
     {
@@ -452,21 +542,24 @@ final class JsonPatch
     /**
      * Reads an object member from stdClass or associative array objects.
      *
-     * @param array<string|int, mixed>|stdClass $object
+     * @phpstan-param JsonObject $object
+     *
+     * @phpstan-return JsonValue
      */
     private static function readObjectMember(array|stdClass $object, string $member): mixed
     {
         if ($object instanceof stdClass) {
-            return $object->{$member};
+            return self::deepCopy($object->{$member});
         }
 
-        return $object[$member];
+        return self::deepCopy($object[$member]);
     }
 
     /**
      * Writes an object member on stdClass or associative array objects.
      *
-     * @param array<string|int, mixed>|stdClass $object
+     * @phpstan-param JsonObject $object
+     * @phpstan-param JsonValue $value
      */
     private static function writeObjectMember(array|stdClass &$object, string $member, mixed $value): void
     {
@@ -482,7 +575,7 @@ final class JsonPatch
     /**
      * Removes an object member from stdClass or associative array objects.
      *
-     * @param array<string|int, mixed>|stdClass $object
+     * @phpstan-param JsonObject $object
      */
     private static function unsetObjectMember(array|stdClass &$object, string $member): void
     {
@@ -497,6 +590,9 @@ final class JsonPatch
 
     /**
      * Compares two PHP values using JSON value equality rules.
+     *
+     * @phpstan-param JsonValue $left
+     * @phpstan-param JsonValue $right
      */
     private static function jsonValuesAreEqual(mixed $left, mixed $right): bool
     {
@@ -541,6 +637,9 @@ final class JsonPatch
 
     /**
      * Reports whether two PHP containers share the same JSON container type.
+     *
+     * @phpstan-param JsonValue $left
+     * @phpstan-param JsonValue $right
      */
     private static function sameJsonContainerType(mixed $left, mixed $right): bool
     {
@@ -551,8 +650,10 @@ final class JsonPatch
     /**
      * Compares JSON arrays, including associative arrays treated as objects.
      *
-     * @param array<mixed> $left
-     * @param array<mixed> $right
+     * @template TKey of array-key
+     *
+     * @phpstan-param array<TKey, mixed> $left
+     * @phpstan-param array<TKey, mixed> $right
      */
     private static function arraysAreEqual(array $left, array $right): bool
     {
@@ -565,7 +666,7 @@ final class JsonPatch
         }
 
         foreach ($left as $index => $value) {
-            if (! self::jsonValuesAreEqual($value, $right[$index])) {
+            if (! self::jsonValuesAreEqual(self::deepCopy($value), self::deepCopy($right[$index]))) {
                 return false;
             }
         }
@@ -576,8 +677,8 @@ final class JsonPatch
     /**
      * Compares JSON object members without depending on member order.
      *
-     * @param array<string|int, mixed> $left
-     * @param array<string|int, mixed> $right
+     * @phpstan-param array<string|int, mixed> $left
+     * @phpstan-param array<string|int, mixed> $right
      */
     private static function objectsAreEqual(array $left, array $right): bool
     {
@@ -590,7 +691,7 @@ final class JsonPatch
                 return false;
             }
 
-            if (! self::jsonValuesAreEqual($value, $right[$key])) {
+            if (! self::jsonValuesAreEqual(self::deepCopy($value), self::deepCopy($right[$key]))) {
                 return false;
             }
         }
@@ -600,6 +701,8 @@ final class JsonPatch
 
     /**
      * Copies JSON-like PHP values while rejecting values JSON cannot encode.
+     *
+     * @phpstan-return JsonValue
      */
     private static function deepCopy(mixed $value): mixed
     {
