@@ -1,0 +1,23 @@
+name: CS Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  cs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - run: composer install --no-interaction --prefer-dist
+
+      - run: composer cs:check
