@@ -21,6 +21,11 @@ use stdClass;
  * @phpstan-type JsonPatchArrayOperation array<string|int, mixed>
  * @phpstan-type JsonPatchOperation JsonPatchArrayOperation|stdClass
  * @phpstan-type JsonPatchDocument list<JsonPatchOperation>
+ * @phpstan-type GeneratedAddOperation array{op: 'add', path: string, value: JsonValue}
+ * @phpstan-type GeneratedRemoveOperation array{op: 'remove', path: string}
+ * @phpstan-type GeneratedReplaceOperation array{op: 'replace', path: string, value: JsonValue}
+ * @phpstan-type GeneratedPatchOperation GeneratedAddOperation|GeneratedRemoveOperation|GeneratedReplaceOperation
+ * @phpstan-type GeneratedPatchDocument list<GeneratedPatchOperation>
  */
 final class JsonPatch
 {
@@ -67,6 +72,235 @@ final class JsonPatch
         }
 
         return json_encode(self::apply($document, $patch), $encodeFlags | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Builds a deterministic JSON Patch document that transforms source into target.
+     *
+     * The generator favors readable add, remove, and replace operations. It does
+     * not infer move or copy operations because those require heuristic choices.
+     *
+     * @param mixed $source
+     * @param mixed $target
+     *
+     * @phpstan-return GeneratedPatchDocument
+     */
+    public static function diff(mixed $source, mixed $target): array
+    {
+        $source = self::deepCopy($source);
+        $target = self::deepCopy($target);
+
+        return self::diffValue($source, $target, []);
+    }
+
+    /**
+     * Decodes two JSON documents and returns an encoded JSON Patch document.
+     *
+     * @throws JsonException
+     */
+    public static function diffJson(
+        string $sourceJson,
+        string $targetJson,
+        int $encodeFlags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+    ): string {
+        $source = json_decode($sourceJson, false, 512, JSON_THROW_ON_ERROR);
+        $target = json_decode($targetJson, false, 512, JSON_THROW_ON_ERROR);
+
+        return json_encode(self::diff($source, $target), $encodeFlags | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Builds patch operations for one JSON value pair.
+     *
+     * @param list<string> $pathTokens
+     *
+     * @phpstan-param JsonValue $source
+     * @phpstan-param JsonValue $target
+     *
+     * @phpstan-return GeneratedPatchDocument
+     */
+    private static function diffValue(mixed $source, mixed $target, array $pathTokens): array
+    {
+        if (self::jsonValuesAreEqual($source, $target)) {
+            return [];
+        }
+
+        if (self::isJsonArray($source) && self::isJsonArray($target)) {
+            return self::diffArray($source, $target, $pathTokens);
+        }
+
+        if (self::isJsonObject($source) && self::isJsonObject($target)) {
+            return self::diffObject($source, $target, $pathTokens);
+        }
+
+        return [
+            self::replaceOperation($pathTokens, $target),
+        ];
+    }
+
+    /**
+     * Builds patch operations for one JSON array pair.
+     *
+     * @param list<string> $pathTokens
+     *
+     * @phpstan-param JsonArray $source
+     * @phpstan-param JsonArray $target
+     *
+     * @phpstan-return GeneratedPatchDocument
+     */
+    private static function diffArray(array $source, array $target, array $pathTokens): array
+    {
+        $operations = [];
+        $sharedLength = min(count($source), count($target));
+
+        for ($index = 0; $index < $sharedLength; $index++) {
+            array_push(
+                $operations,
+                ...self::diffValue(
+                    self::deepCopy($source[$index]),
+                    self::deepCopy($target[$index]),
+                    [...$pathTokens, (string) $index],
+                ),
+            );
+        }
+
+        for ($index = count($source) - 1; $index >= count($target); $index--) {
+            $operations[] = self::removeOperation([...$pathTokens, (string) $index]);
+        }
+
+        for ($index = count($source); $index < count($target); $index++) {
+            $operations[] = self::addOperation([...$pathTokens, '-'], self::deepCopy($target[$index]));
+        }
+
+        return $operations;
+    }
+
+    /**
+     * Builds patch operations for one JSON object pair.
+     *
+     * @param list<string> $pathTokens
+     *
+     * @phpstan-param JsonObject $source
+     * @phpstan-param JsonObject $target
+     *
+     * @phpstan-return GeneratedPatchDocument
+     */
+    private static function diffObject(array|stdClass $source, array|stdClass $target, array $pathTokens): array
+    {
+        $sourceMembers = self::objectMembers($source);
+        $targetMembers = self::objectMembers($target);
+        $operations = [];
+
+        foreach ($sourceMembers as $member => $value) {
+            if (! array_key_exists($member, $targetMembers)) {
+                $operations[] = self::removeOperation([...$pathTokens, (string) $member]);
+            }
+        }
+
+        foreach ($targetMembers as $member => $value) {
+            if (! array_key_exists($member, $sourceMembers)) {
+                $operations[] = self::addOperation([...$pathTokens, (string) $member], self::deepCopy($value));
+            }
+        }
+
+        foreach ($targetMembers as $member => $targetValue) {
+            if (array_key_exists($member, $sourceMembers)) {
+                array_push(
+                    $operations,
+                    ...self::diffValue(
+                        self::deepCopy($sourceMembers[$member]),
+                        self::deepCopy($targetValue),
+                        [...$pathTokens, (string) $member],
+                    ),
+                );
+            }
+        }
+
+        return $operations;
+    }
+
+    /**
+     * Returns an object's members as an associative array.
+     *
+     * @phpstan-param JsonObject $object
+     *
+     * @phpstan-return array<string|int, mixed>
+     */
+    private static function objectMembers(array|stdClass $object): array
+    {
+        if ($object instanceof stdClass) {
+            return get_object_vars($object);
+        }
+
+        return $object;
+    }
+
+    /**
+     * Creates an add operation for a generated patch.
+     *
+     * @param list<string> $pathTokens
+     *
+     * @phpstan-param JsonValue $value
+     *
+     * @phpstan-return GeneratedAddOperation
+     */
+    private static function addOperation(array $pathTokens, mixed $value): array
+    {
+        return [
+            'op' => 'add',
+            'path' => self::pathFromTokens($pathTokens),
+            'value' => self::deepCopy($value),
+        ];
+    }
+
+    /**
+     * Creates a remove operation for a generated patch.
+     *
+     * @param list<string> $pathTokens
+     *
+     * @phpstan-return GeneratedRemoveOperation
+     */
+    private static function removeOperation(array $pathTokens): array
+    {
+        return [
+            'op' => 'remove',
+            'path' => self::pathFromTokens($pathTokens),
+        ];
+    }
+
+    /**
+     * Creates a replace operation for a generated patch.
+     *
+     * @param list<string> $pathTokens
+     *
+     * @phpstan-param JsonValue $value
+     *
+     * @phpstan-return GeneratedReplaceOperation
+     */
+    private static function replaceOperation(array $pathTokens, mixed $value): array
+    {
+        return [
+            'op' => 'replace',
+            'path' => self::pathFromTokens($pathTokens),
+            'value' => self::deepCopy($value),
+        ];
+    }
+
+    /**
+     * Formats parsed path tokens as a JSON Pointer string.
+     *
+     * @param list<string> $pathTokens
+     */
+    private static function pathFromTokens(array $pathTokens): string
+    {
+        if ($pathTokens === []) {
+            return '';
+        }
+
+        return '/' . implode(
+            '/',
+            array_map(static fn (string $token): string => JsonPointer::escapeToken($token), $pathTokens),
+        );
     }
 
     /**

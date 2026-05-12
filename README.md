@@ -2,9 +2,9 @@
 
 Reusable RFC 6902 JSON Patch support for PHP.
 
-The package applies JSON Patch documents to JSON-like PHP values and includes a
-small RFC 6901 JSON Pointer helper for parsing, escaping, and reusing pointer
-tokens.
+The package applies JSON Patch documents, generates deterministic JSON Patch
+documents from two JSON-like values, and includes a small RFC 6901 JSON Pointer
+helper for parsing, escaping, and reusing pointer tokens.
 
 ## Installation
 
@@ -15,6 +15,8 @@ composer require bumpcore/json-patch
 Requires PHP 8.3 or newer.
 
 ## Usage
+
+### Applying Patches
 
 ```php
 use BumpCore\JsonPatch\JsonPatch;
@@ -48,6 +50,39 @@ $json = JsonPatch::applyJson(
 );
 
 // {"child":{"0":"kept as an object member"}}
+```
+
+### Generating Patches
+
+```php
+use BumpCore\JsonPatch\JsonPatch;
+
+$source = ['name' => 'old', 'tags' => ['stable']];
+$target = ['name' => 'new', 'tags' => ['stable', 'fast']];
+
+$patch = JsonPatch::diff($source, $target);
+
+// [
+//     ['op' => 'replace', 'path' => '/name', 'value' => 'new'],
+//     ['op' => 'add', 'path' => '/tags/-', 'value' => 'fast'],
+// ]
+```
+
+`JsonPatch::diff()` generates readable `add`, `remove`, and `replace`
+operations. It intentionally does not infer `move` or `copy` operations because
+those require heuristic choices and can make generated patches harder to review.
+
+For JSON text input and output, use `JsonPatch::diffJson()`:
+
+```php
+use BumpCore\JsonPatch\JsonPatch;
+
+$patchJson = JsonPatch::diffJson(
+    '{"name":"old"}',
+    '{"name":"new","enabled":true}',
+);
+
+// [{"op":"add","path":"/enabled","value":true},{"op":"replace","path":"/name","value":"new"}]
 ```
 
 ## Supported Operations

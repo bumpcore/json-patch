@@ -51,6 +51,117 @@ final class JsonPatchTest extends TestCase
     }
 
     /**
+     * Confirms equal documents generate no patch operations.
+     */
+    public function testItGeneratesAnEmptyPatchForEqualDocuments(): void
+    {
+        self::assertSame([], JsonPatch::diff((object) ['foo' => 'bar'], ['foo' => 'bar']));
+    }
+
+    /**
+     * Confirms root-level type changes generate a root replace operation.
+     */
+    public function testItGeneratesRootReplaceOperations(): void
+    {
+        $patch = JsonPatch::diff('old', ['new']);
+
+        self::assertSame([
+            ['op' => 'replace', 'path' => '', 'value' => ['new']],
+        ], $patch);
+        self::assertSame(['new'], JsonPatch::apply('old', $patch));
+    }
+
+    /**
+     * Confirms object differences generate deterministic remove, add, and replace operations.
+     */
+    public function testItGeneratesPatchForObjectDifferences(): void
+    {
+        $source = (object) [
+            'remove' => 'gone',
+            'same' => 1,
+            'nested' => (object) [
+                'change' => 'before',
+                'same' => true,
+            ],
+            'escaped/key~' => 'old',
+        ];
+        $target = (object) [
+            'same' => 1,
+            'nested' => (object) [
+                'change' => 'after',
+                'same' => true,
+                'added' => null,
+            ],
+            'escaped/key~' => 'new',
+            'added' => ['tail'],
+        ];
+
+        $patch = JsonPatch::diff($source, $target);
+
+        self::assertSame([
+            ['op' => 'remove', 'path' => '/remove'],
+            ['op' => 'add', 'path' => '/added', 'value' => ['tail']],
+            ['op' => 'add', 'path' => '/nested/added', 'value' => null],
+            ['op' => 'replace', 'path' => '/nested/change', 'value' => 'after'],
+            ['op' => 'replace', 'path' => '/escaped~1key~0', 'value' => 'new'],
+        ], $patch);
+        self::assertEquals($target, JsonPatch::apply($source, $patch));
+    }
+
+    /**
+     * Confirms associative arrays are diffed as JSON objects when they are not lists.
+     */
+    public function testItGeneratesPatchForAssociativeArrayObjects(): void
+    {
+        $patch = JsonPatch::diff(['foo' => 'bar'], ['foo' => 'baz', 'added' => true]);
+
+        self::assertSame([
+            ['op' => 'add', 'path' => '/added', 'value' => true],
+            ['op' => 'replace', 'path' => '/foo', 'value' => 'baz'],
+        ], $patch);
+        self::assertSame(['foo' => 'baz', 'added' => true], JsonPatch::apply(['foo' => 'bar'], $patch));
+    }
+
+    /**
+     * Confirms list differences recurse into shared indexes and append tail values.
+     */
+    public function testItGeneratesPatchForArrayDifferencesAndAppendsTailValues(): void
+    {
+        $patch = JsonPatch::diff([1, ['old']], [1, ['new'], 3]);
+
+        self::assertSame([
+            ['op' => 'replace', 'path' => '/1/0', 'value' => 'new'],
+            ['op' => 'add', 'path' => '/-', 'value' => 3],
+        ], $patch);
+        self::assertSame([1, ['new'], 3], JsonPatch::apply([1, ['old']], $patch));
+    }
+
+    /**
+     * Confirms list tail removals are generated from the end to preserve indexes.
+     */
+    public function testItGeneratesPatchForArrayTailRemovalsFromTheEnd(): void
+    {
+        $patch = JsonPatch::diff([1, 2, 3], [1]);
+
+        self::assertSame([
+            ['op' => 'remove', 'path' => '/2'],
+            ['op' => 'remove', 'path' => '/1'],
+        ], $patch);
+        self::assertSame([1], JsonPatch::apply([1, 2, 3], $patch));
+    }
+
+    /**
+     * Confirms JSON-string diff helpers encode a patch document.
+     */
+    public function testItGeneratesJsonPatchText(): void
+    {
+        $patchJson = JsonPatch::diffJson('{"foo":"bar"}', '{"foo":"baz","extra":true}');
+
+        self::assertSame('[{"op":"add","path":"/extra","value":true},{"op":"replace","path":"/foo","value":"baz"}]', $patchJson);
+        self::assertSame('{"foo":"baz","extra":true}', JsonPatch::applyJson('{"foo":"bar"}', $patchJson));
+    }
+
+    /**
      * Confirms JSON patch text must decode to an array document.
      */
     public function testItRejectsPatchJsonThatDoesNotDecodeToAnArray(): void
