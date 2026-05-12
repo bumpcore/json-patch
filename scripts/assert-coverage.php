@@ -2,14 +2,20 @@
 
 declare(strict_types=1);
 
-if ($argc !== 3) {
+$arguments = $_SERVER['argv'] ?? [];
+
+if (
+    ! is_array($arguments)
+    || count($arguments) !== 3
+    || ! is_string($arguments[1])
+    || ! is_string($arguments[2])
+) {
     fwrite(STDERR, "Usage: php scripts/assert-coverage.php <clover.xml> <minimum-percent>\n");
     exit(2);
 }
 
-[$script, $coverageFile, $minimumCoverage] = $argv;
-
-unset($script);
+$coverageFile = $arguments[1];
+$minimumCoverage = $arguments[2];
 
 if (! is_file($coverageFile)) {
     fwrite(STDERR, sprintf("Coverage file does not exist: %s\n", $coverageFile));
