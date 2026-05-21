@@ -7,7 +7,7 @@ namespace BumpCore\JsonPatch\Exception;
 /**
  * Raised when a JSON Pointer cannot identify the requested target.
  */
-final class JsonPointerException extends JsonPatchException
+class JsonPointerException extends JsonPatchException
 {
     // ...
 }

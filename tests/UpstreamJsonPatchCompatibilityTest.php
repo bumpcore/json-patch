@@ -13,7 +13,7 @@ use stdClass;
 /**
  * Runs the upstream JSON Patch compatibility corpus against this implementation.
  */
-final class UpstreamJsonPatchCompatibilityTest extends TestCase
+class UpstreamJsonPatchCompatibilityTest extends TestCase
 {
     #[DataProvider('upstreamCases')]
     /**

@@ -27,7 +27,7 @@ use stdClass;
  * @phpstan-type GeneratedPatchOperation GeneratedAddOperation|GeneratedRemoveOperation|GeneratedReplaceOperation
  * @phpstan-type GeneratedPatchDocument list<GeneratedPatchOperation>
  */
-final class JsonPatch
+class JsonPatch
 {
     public const MEDIA_TYPE = 'application/json-patch+json';
 
@@ -339,18 +339,44 @@ final class JsonPatch
      */
     private static function applyOperation(mixed $document, array|stdClass $operation, int $index): mixed
     {
-        $op = self::operationMember($operation, 'op', $index);
-        $path = JsonPointer::fromString(self::operationMember($operation, 'path', $index));
+        $op = null;
+        $pathString = null;
+        $fromString = null;
 
-        return match ($op) {
-            'add' => self::add($document, $path, self::operationValue($operation, 'value', $index)),
-            'remove' => self::remove($document, $path),
-            'replace' => self::replace($document, $path, self::operationValue($operation, 'value', $index)),
-            'move' => self::move($document, JsonPointer::fromString(self::operationMember($operation, 'from', $index)), $path),
-            'copy' => self::copy($document, JsonPointer::fromString(self::operationMember($operation, 'from', $index)), $path),
-            'test' => self::test($document, $path, self::operationValue($operation, 'value', $index)),
-            default => throw new InvalidPatchException(sprintf('Unsupported operation "%s".', $op)),
-        };
+        try {
+            $op = self::operationMember($operation, 'op', $index);
+            $pathString = self::operationMember($operation, 'path', $index);
+            $path = JsonPointer::fromString($pathString);
+
+            switch ($op) {
+                case 'add':
+                    return self::add($document, $path, self::operationValue($operation, 'value', $index));
+
+                case 'remove':
+                    return self::remove($document, $path);
+
+                case 'replace':
+                    return self::replace($document, $path, self::operationValue($operation, 'value', $index));
+
+                case 'move':
+                    $fromString = self::operationMember($operation, 'from', $index);
+
+                    return self::move($document, JsonPointer::fromString($fromString), $path);
+
+                case 'copy':
+                    $fromString = self::operationMember($operation, 'from', $index);
+
+                    return self::copy($document, JsonPointer::fromString($fromString), $path);
+
+                case 'test':
+                    return self::test($document, $path, self::operationValue($operation, 'value', $index));
+
+                default:
+                    throw new InvalidPatchException(sprintf('Unsupported operation "%s".', $op));
+            }
+        } catch (JsonPatchException $exception) {
+            throw $exception->withContext($index, $op, $pathString, $fromString);
+        }
     }
 
     /**

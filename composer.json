@@ -1,8 +1,14 @@
 {
     "name": "bumpcore/json-patch",
-    "description": "RFC 6902 JSON Patch implementation for PHP.",
+    "description": "RFC 6902 JSON Patch and RFC 7396 JSON Merge Patch implementation for PHP.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "json",
+        "json-merge-patch",
+        "json-patch",
+        "json-pointer"
+    ],
     "autoload": {
         "psr-4": {
             "BumpCore\\JsonPatch\\": "src/"
@@ -26,8 +32,8 @@
         "analyse": "phpstan analyse --debug --memory-limit=1G",
         "test": "phpunit",
         "test:coverage": "@php scripts/run-coverage.php",
-        "cs": "php-cs-fixer fix --config=.php-cs-fixer.dist.php --diff --verbose",
-        "cs:check": "php-cs-fixer fix --config=.php-cs-fixer.dist.php --diff --dry-run --verbose"
+        "cs": "php-cs-fixer fix --config=.php-cs-fixer.dist.php --diff --verbose --sequential",
+        "cs:check": "php-cs-fixer fix --config=.php-cs-fixer.dist.php --diff --dry-run --verbose --sequential"
     },
     "config": {
         "sort-packages": true

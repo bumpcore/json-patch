@@ -6,6 +6,7 @@ namespace BumpCore\JsonPatch\Tests;
 
 use BumpCore\JsonPatch\Exception\InvalidPatchException;
 use BumpCore\JsonPatch\Exception\JsonPatchException;
+use BumpCore\JsonPatch\Exception\JsonPointerException;
 use BumpCore\JsonPatch\Exception\TestFailedException;
 use BumpCore\JsonPatch\JsonPatch;
 use JsonException;
@@ -15,7 +16,7 @@ use stdClass;
 /**
  * Covers package API behavior that is not fully expressed by upstream fixtures.
  */
-final class JsonPatchTest extends TestCase
+class JsonPatchTest extends TestCase
 {
     /**
      * Confirms patch application does not mutate the input document.
@@ -379,6 +380,69 @@ final class JsonPatchTest extends TestCase
         JsonPatch::apply(['foo'], [
             (object) ['op' => 'remove', 'path' => '/-'],
         ]);
+    }
+
+    /**
+     * Confirms operation failures expose operation context.
+     */
+    public function testItAddsOperationContextToPatchFailures(): void
+    {
+        try {
+            JsonPatch::apply(['foo'], [
+                (object) ['op' => 'remove', 'path' => '/-'],
+            ]);
+        } catch (JsonPointerException $exception) {
+            self::assertSame(0, $exception->operationIndex());
+            self::assertSame('remove', $exception->operation());
+            self::assertSame('/-', $exception->path());
+            self::assertNull($exception->from());
+
+            return;
+        }
+
+        self::fail('Patch operation should have failed.');
+    }
+
+    /**
+     * Confirms move and copy failures expose source pointer context.
+     */
+    public function testItAddsFromContextToMoveAndCopyFailures(): void
+    {
+        try {
+            JsonPatch::apply((object) ['source' => true], [
+                (object) ['op' => 'copy', 'from' => '/missing', 'path' => '/target'],
+            ]);
+        } catch (JsonPointerException $exception) {
+            self::assertSame(0, $exception->operationIndex());
+            self::assertSame('copy', $exception->operation());
+            self::assertSame('/target', $exception->path());
+            self::assertSame('/missing', $exception->from());
+
+            return;
+        }
+
+        self::fail('Copy operation should have failed.');
+    }
+
+    /**
+     * Confirms invalid operation shapes still receive available operation context.
+     */
+    public function testItAddsPartialContextToInvalidOperationFailures(): void
+    {
+        try {
+            JsonPatch::apply([], [
+                (object) ['op' => 'move', 'path' => '/target'],
+            ]);
+        } catch (InvalidPatchException $exception) {
+            self::assertSame(0, $exception->operationIndex());
+            self::assertSame('move', $exception->operation());
+            self::assertSame('/target', $exception->path());
+            self::assertNull($exception->from());
+
+            return;
+        }
+
+        self::fail('Move operation should have failed.');
     }
 
     /**
