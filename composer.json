@@ -9,6 +9,13 @@
         "json-patch",
         "json-pointer"
     ],
+    "authors": [
+        {
+            "name": "Abdulkadir Cemiloglu",
+            "email": "kadir.cemiloglu1@gmail.com",
+            "role": "Developer"
+        }
+    ],
     "autoload": {
         "psr-4": {
             "BumpCore\\JsonPatch\\": "src/"
