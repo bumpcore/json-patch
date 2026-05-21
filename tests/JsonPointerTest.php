@@ -28,6 +28,17 @@ class JsonPointerTest extends TestCase
     }
 
     /**
+     * Confirms subclasses can reuse the pointer factory after removing final modifiers.
+     */
+    public function testItPreservesSubclassTypeWhenParsingPointers(): void
+    {
+        $pointer = JsonPointerTestPointer::fromString('/foo');
+
+        self::assertInstanceOf(JsonPointerTestPointer::class, $pointer);
+        self::assertSame(['foo'], $pointer->tokens());
+    }
+
+    /**
      * Confirms pointer tokens are decoded in RFC 6901 order.
      */
     public function testItParsesAndUnescapesReferenceTokens(): void
@@ -277,4 +288,12 @@ class JsonPointerTest extends TestCase
 
         JsonPointer::set([], '', INF);
     }
+}
+
+/**
+ * Test subclass for verifying JsonPointer inheritance support.
+ */
+class JsonPointerTestPointer extends JsonPointer
+{
+    // ...
 }

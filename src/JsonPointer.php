@@ -10,6 +10,8 @@ use stdClass;
 
 /**
  * Parsed RFC 6901 JSON Pointer with escaped token helpers.
+ *
+ * @phpstan-consistent-constructor
  */
 class JsonPointer
 {
@@ -18,7 +20,7 @@ class JsonPointer
      *
      * @param list<string> $tokens
      */
-    private function __construct(
+    protected function __construct(
         private readonly string $value,
         private readonly array $tokens,
     ) {
@@ -27,10 +29,10 @@ class JsonPointer
     /**
      * Parses the JSON string representation from RFC 6901.
      */
-    public static function fromString(string $pointer): self
+    public static function fromString(string $pointer): static
     {
         if ($pointer === '') {
-            return new self('', []);
+            return new static('', []);
         }
 
         if (! str_starts_with($pointer, '/')) {
@@ -42,7 +44,7 @@ class JsonPointer
             explode('/', substr($pointer, 1)),
         );
 
-        return new self($pointer, $tokens);
+        return new static($pointer, $tokens);
     }
 
     /**
