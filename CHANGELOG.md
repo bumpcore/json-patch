@@ -4,6 +4,14 @@ All notable changes to `bumpcore/json-patch` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-21
+
+### Changed
+
+- Improve README package documentation and usage guidance.
+- Add Composer author metadata with the developer role.
+- Set `0.x` as the default release branch.
+
 ## [0.1.0] - 2026-05-21
 
 ### Added
@@ -16,5 +24,6 @@ All notable changes to `bumpcore/json-patch` will be documented in this file.
 - Add upstream `json-patch/json-patch-tests` fixture parity coverage.
 - Add PHPUnit, PHPStan level 9, PHP CS Fixer, GitHub Actions, and a 100% coverage gate.
 
-[Unreleased]: https://github.com/bumpcore/json-patch/compare/v0.1.0...0.x
+[Unreleased]: https://github.com/bumpcore/json-patch/compare/v0.1.1...0.x
+[0.1.1]: https://github.com/bumpcore/json-patch/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/bumpcore/json-patch/releases/tag/v0.1.0
