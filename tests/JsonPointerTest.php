@@ -114,7 +114,10 @@ class JsonPointerTest extends TestCase
         $read = JsonPointer::get($document, '/foo');
         self::assertInstanceOf(stdClass::class, $read);
 
-        $read->bar[0] = 'changed';
+        $bar = $read->bar;
+        self::assertIsArray($bar);
+        $bar[0] = 'changed';
+        $read->bar = $bar;
 
         self::assertSame('baz', $document->foo->bar[0]);
     }
@@ -340,7 +343,10 @@ class JsonPointerTest extends TestCase
 
         self::assertInstanceOf(stdClass::class, $result);
 
-        $result->untouched->name = 'mutated after set';
+        $untouched = $result->untouched;
+        self::assertInstanceOf(stdClass::class, $untouched);
+
+        $untouched->name = 'mutated after set';
 
         self::assertSame('stable', $document->untouched->name);
     }

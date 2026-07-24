@@ -35,7 +35,12 @@ class JsonPatchTest extends TestCase
 
         self::assertInstanceOf(stdClass::class, $result);
         self::assertSame('original', $document->items[0]->name);
-        self::assertSame('changed', $result->items[0]->name);
+
+        $items = $result->items;
+        self::assertIsArray($items);
+        $item = $items[0];
+        self::assertInstanceOf(stdClass::class, $item);
+        self::assertSame('changed', $item->name);
     }
 
     /**
@@ -615,7 +620,10 @@ class JsonPatchTest extends TestCase
 
         self::assertInstanceOf(stdClass::class, $result);
 
-        $result->untouched->name = 'mutated after apply';
+        $untouched = $result->untouched;
+        self::assertInstanceOf(stdClass::class, $untouched);
+
+        $untouched->name = 'mutated after apply';
 
         self::assertSame('stable', $document->untouched->name);
     }
@@ -635,9 +643,14 @@ class JsonPatchTest extends TestCase
 
         self::assertInstanceOf(stdClass::class, $result);
 
-        $result->duplicate->name = 'mutated copy';
+        $duplicate = $result->duplicate;
+        self::assertInstanceOf(stdClass::class, $duplicate);
 
-        self::assertSame('original', $result->source->name);
+        $duplicate->name = 'mutated copy';
+
+        $source = $result->source;
+        self::assertInstanceOf(stdClass::class, $source);
+        self::assertSame('original', $source->name);
     }
 
     /**
