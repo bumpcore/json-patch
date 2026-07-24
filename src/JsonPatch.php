@@ -116,7 +116,7 @@ class JsonPatch
      */
     private static function diffValue(mixed $source, mixed $target, string $path): array
     {
-        if (self::jsonValuesAreEqual($source, $target)) {
+        if ($source === $target) {
             return [];
         }
 
@@ -126,6 +126,10 @@ class JsonPatch
 
         if (self::isJsonObject($source) && self::isJsonObject($target)) {
             return self::diffObject($source, $target, $path);
+        }
+
+        if (self::jsonValuesAreEqual($source, $target)) {
+            return [];
         }
 
         return [
@@ -755,6 +759,10 @@ class JsonPatch
      */
     private static function jsonValuesAreEqual(mixed $left, mixed $right): bool
     {
+        if ($left === $right) {
+            return true;
+        }
+
         if (self::isJsonNumber($left) && self::isJsonNumber($right)) {
             return (float) $left === (float) $right;
         }
