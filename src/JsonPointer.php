@@ -39,10 +39,11 @@ class JsonPointer
             throw new JsonPointerException('JSON Pointer must be empty or start with "/".');
         }
 
-        $tokens = array_map(
-            static fn (string $token): string => self::unescapeToken($token),
-            explode('/', substr($pointer, 1)),
-        );
+        $tokens = explode('/', substr($pointer, 1));
+
+        foreach ($tokens as $index => $token) {
+            $tokens[$index] = self::unescapeToken($token);
+        }
 
         return new static($pointer, $tokens);
     }
@@ -52,6 +53,10 @@ class JsonPointer
      */
     public static function escapeToken(string $token): string
     {
+        if (strpbrk($token, '~/') === false) {
+            return $token;
+        }
+
         return str_replace(['~', '/'], ['~0', '~1'], $token);
     }
 
@@ -60,6 +65,10 @@ class JsonPointer
      */
     public static function unescapeToken(string $token): string
     {
+        if (! str_contains($token, '~')) {
+            return $token;
+        }
+
         if (preg_match('/~(?![01])/', $token) === 1) {
             throw new JsonPointerException('JSON Pointer contains an invalid escape sequence.');
         }
@@ -341,7 +350,7 @@ class JsonPointer
             throw new JsonPointerException('"-" does not reference an existing array value.');
         }
 
-        if (preg_match('/^(0|[1-9][0-9]*)$/', $token) !== 1) {
+        if ($token !== '0' && ($token === '' || $token[0] === '0' || ! ctype_digit($token))) {
             throw new JsonPointerException('Array index must be a non-negative integer without leading zeros.');
         }
 
