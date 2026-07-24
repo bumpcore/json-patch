@@ -75,7 +75,7 @@ class JsonPointer
         $pointer = self::coerce($pointer);
 
         try {
-            return self::valueAt(self::deepCopy($document), $pointer->tokens);
+            return self::import(self::valueAt($document, $pointer->tokens));
         } catch (JsonPointerException $exception) {
             throw $exception->withContext(path: (string) $pointer);
         }
@@ -89,7 +89,7 @@ class JsonPointer
         $pointer = self::coerce($pointer);
 
         try {
-            self::valueAt(self::deepCopy($document), $pointer->tokens);
+            self::assertJsonValue(self::valueAt($document, $pointer->tokens));
 
             return true;
         } catch (JsonPointerException) {
@@ -107,7 +107,7 @@ class JsonPointer
         $pointer = self::coerce($pointer);
 
         try {
-            return self::setAt(self::deepCopy($document), $pointer->tokens, self::deepCopy($value));
+            return self::setAt(self::import($document), $pointer->tokens, self::import($value));
         } catch (JsonPointerException $exception) {
             throw $exception->withContext(path: (string) $pointer);
         }
@@ -123,7 +123,7 @@ class JsonPointer
         $pointer = self::coerce($pointer);
 
         try {
-            return self::removeAt(self::deepCopy($document), $pointer->tokens);
+            return self::removeAt(self::import($document), $pointer->tokens);
         } catch (JsonPointerException $exception) {
             throw $exception->withContext(path: (string) $pointer);
         }
@@ -197,7 +197,7 @@ class JsonPointer
             $target = self::childValue($target, $token);
         }
 
-        return self::deepCopy($target);
+        return $target;
     }
 
     /**
@@ -205,23 +205,23 @@ class JsonPointer
      *
      * @param list<string> $tokens
      */
-    private static function setAt(mixed $target, array $tokens, mixed $value): mixed
+    private static function setAt(mixed $target, array $tokens, mixed $value, int $depth = 0): mixed
     {
-        if ($tokens === []) {
-            return self::deepCopy($value);
+        if (! isset($tokens[$depth])) {
+            return $value;
         }
 
-        $token = array_shift($tokens);
+        $token = $tokens[$depth];
 
-        if ($tokens === []) {
+        if (! isset($tokens[$depth + 1])) {
             if (self::isJsonArray($target)) {
-                $target[self::arrayIndexForExistingValue($target, $token)] = self::deepCopy($value);
+                $target[self::arrayIndexForExistingValue($target, $token)] = $value;
 
                 return $target;
             }
 
             if (self::isJsonObject($target)) {
-                self::writeObjectMember($target, $token, self::deepCopy($value));
+                self::writeObjectMember($target, $token, $value);
 
                 return $target;
             }
@@ -230,7 +230,7 @@ class JsonPointer
         }
 
         $child = self::childValue($target, $token);
-        $updatedChild = self::setAt($child, $tokens, $value);
+        $updatedChild = self::setAt($child, $tokens, $value, $depth + 1);
 
         return self::replaceChild($target, $token, $updatedChild);
     }
@@ -240,15 +240,15 @@ class JsonPointer
      *
      * @param list<string> $tokens
      */
-    private static function removeAt(mixed $target, array $tokens): mixed
+    private static function removeAt(mixed $target, array $tokens, int $depth = 0): mixed
     {
-        if ($tokens === []) {
+        if (! isset($tokens[$depth])) {
             return null;
         }
 
-        $token = array_shift($tokens);
+        $token = $tokens[$depth];
 
-        if ($tokens === []) {
+        if (! isset($tokens[$depth + 1])) {
             if (self::isJsonArray($target)) {
                 array_splice($target, self::arrayIndexForExistingValue($target, $token), 1);
 
@@ -266,7 +266,7 @@ class JsonPointer
         }
 
         $child = self::childValue($target, $token);
-        $updatedChild = self::removeAt($child, $tokens);
+        $updatedChild = self::removeAt($child, $tokens, $depth + 1);
 
         return self::replaceChild($target, $token, $updatedChild);
     }
@@ -277,7 +277,7 @@ class JsonPointer
     private static function childValue(mixed $target, string $token): mixed
     {
         if (self::isJsonArray($target)) {
-            return self::deepCopy($target[self::arrayIndexForExistingValue($target, $token)]);
+            return $target[self::arrayIndexForExistingValue($target, $token)];
         }
 
         if (self::isJsonObject($target)) {
@@ -295,14 +295,14 @@ class JsonPointer
     private static function replaceChild(mixed $target, string $token, mixed $value): mixed
     {
         if (self::isJsonArray($target)) {
-            $target[self::arrayIndexForExistingValue($target, $token)] = self::deepCopy($value);
+            $target[self::arrayIndexForExistingValue($target, $token)] = $value;
 
             return $target;
         }
 
         if (self::isJsonObject($target)) {
             self::assertObjectMemberExists($target, $token);
-            self::writeObjectMember($target, $token, self::deepCopy($value));
+            self::writeObjectMember($target, $token, $value);
 
             return $target;
         }
@@ -382,10 +382,10 @@ class JsonPointer
     private static function readObjectMember(array|stdClass $object, string $member): mixed
     {
         if ($object instanceof stdClass) {
-            return self::deepCopy($object->{$member});
+            return $object->{$member};
         }
 
-        return self::deepCopy($object[$member]);
+        return $object[$member];
     }
 
     /**
@@ -396,12 +396,12 @@ class JsonPointer
     private static function writeObjectMember(array|stdClass &$object, string $member, mixed $value): void
     {
         if ($object instanceof stdClass) {
-            $object->{$member} = self::deepCopy($value);
+            $object->{$member} = $value;
 
             return;
         }
 
-        $object[$member] = self::deepCopy($value);
+        $object[$member] = $value;
     }
 
     /**
@@ -421,19 +421,46 @@ class JsonPointer
     }
 
     /**
-     * Copies JSON-like PHP values while rejecting values JSON cannot encode.
+     * Validates a JSON-like value and returns a copy that is safe to hand out.
+     *
+     * Arrays already behave as values through engine copy-on-write, so they are
+     * shared instead of rebuilt. stdClass instances have reference semantics
+     * and are cloned, including clones of every array holding one.
      */
-    private static function deepCopy(mixed $value): mixed
+    private static function import(mixed $value): mixed
+    {
+        $containsObject = false;
+
+        return self::importValue($value, $containsObject);
+    }
+
+    /**
+     * Recursive worker for import() that rebuilds only object-bearing subtrees.
+     */
+    private static function importValue(mixed $value, bool &$containsObject): mixed
     {
         if (is_array($value)) {
-            return array_map(static fn (mixed $child): mixed => self::deepCopy($child), $value);
+            $result = $value;
+
+            foreach ($value as $key => $child) {
+                $childContainsObject = false;
+                $copy = self::importValue($child, $childContainsObject);
+
+                if ($childContainsObject) {
+                    $containsObject = true;
+                    $result[$key] = $copy;
+                }
+            }
+
+            return $result;
         }
 
         if ($value instanceof stdClass) {
+            $containsObject = true;
             $copy = new stdClass();
 
             foreach (get_object_vars($value) as $name => $child) {
-                $copy->{$name} = self::deepCopy($child);
+                $copy->{$name} = self::import($child);
             }
 
             return $copy;
@@ -445,6 +472,38 @@ class JsonPointer
 
         if ($value === null || is_scalar($value)) {
             return $value;
+        }
+
+        throw new InvalidPatchException(sprintf('Unsupported JSON value of type %s.', get_debug_type($value)));
+    }
+
+    /**
+     * Validates a JSON-like value without copying any part of it.
+     */
+    private static function assertJsonValue(mixed $value): void
+    {
+        if (is_array($value)) {
+            foreach ($value as $child) {
+                self::assertJsonValue($child);
+            }
+
+            return;
+        }
+
+        if ($value instanceof stdClass) {
+            foreach (get_object_vars($value) as $child) {
+                self::assertJsonValue($child);
+            }
+
+            return;
+        }
+
+        if (is_float($value) && ! is_finite($value)) {
+            throw new InvalidPatchException('JSON numbers must be finite.');
+        }
+
+        if ($value === null || is_scalar($value)) {
+            return;
         }
 
         throw new InvalidPatchException(sprintf('Unsupported JSON value of type %s.', get_debug_type($value)));

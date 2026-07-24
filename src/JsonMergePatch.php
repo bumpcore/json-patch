@@ -26,7 +26,7 @@ class JsonMergePatch
      */
     public static function apply(mixed $document, mixed $patch): mixed
     {
-        return self::mergeValue(self::deepCopy($document), self::deepCopy($patch));
+        return self::mergeValue(self::import($document), self::import($patch));
     }
 
     /**
@@ -51,7 +51,7 @@ class JsonMergePatch
     private static function mergeValue(mixed $target, mixed $patch): mixed
     {
         if (! self::isJsonObject($patch)) {
-            return self::deepCopy($patch);
+            return $patch;
         }
 
         if (! self::isJsonObject($target)) {
@@ -127,10 +127,10 @@ class JsonMergePatch
     private static function readObjectMember(array|stdClass $object, string $member): mixed
     {
         if ($object instanceof stdClass) {
-            return self::deepCopy($object->{$member});
+            return $object->{$member};
         }
 
-        return self::deepCopy($object[$member]);
+        return $object[$member];
     }
 
     /**
@@ -141,12 +141,12 @@ class JsonMergePatch
     private static function writeObjectMember(array|stdClass &$object, string $member, mixed $value): void
     {
         if ($object instanceof stdClass) {
-            $object->{$member} = self::deepCopy($value);
+            $object->{$member} = $value;
 
             return;
         }
 
-        $object[$member] = self::deepCopy($value);
+        $object[$member] = $value;
     }
 
     /**
@@ -166,19 +166,46 @@ class JsonMergePatch
     }
 
     /**
-     * Copies JSON-like PHP values while rejecting values JSON cannot encode.
+     * Validates a JSON-like value and returns a copy that is safe to hand out.
+     *
+     * Arrays already behave as values through engine copy-on-write, so they are
+     * shared instead of rebuilt. stdClass instances have reference semantics
+     * and are cloned, including clones of every array holding one.
      */
-    private static function deepCopy(mixed $value): mixed
+    private static function import(mixed $value): mixed
+    {
+        $containsObject = false;
+
+        return self::importValue($value, $containsObject);
+    }
+
+    /**
+     * Recursive worker for import() that rebuilds only object-bearing subtrees.
+     */
+    private static function importValue(mixed $value, bool &$containsObject): mixed
     {
         if (is_array($value)) {
-            return array_map(static fn (mixed $child): mixed => self::deepCopy($child), $value);
+            $result = $value;
+
+            foreach ($value as $key => $child) {
+                $childContainsObject = false;
+                $copy = self::importValue($child, $childContainsObject);
+
+                if ($childContainsObject) {
+                    $containsObject = true;
+                    $result[$key] = $copy;
+                }
+            }
+
+            return $result;
         }
 
         if ($value instanceof stdClass) {
+            $containsObject = true;
             $copy = new stdClass();
 
             foreach (get_object_vars($value) as $name => $child) {
-                $copy->{$name} = self::deepCopy($child);
+                $copy->{$name} = self::import($child);
             }
 
             return $copy;
