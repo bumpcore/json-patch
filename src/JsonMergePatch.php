@@ -42,7 +42,9 @@ class JsonMergePatch
         $document = json_decode($documentJson, false, 512, JSON_THROW_ON_ERROR);
         $patch = json_decode($patchJson, false, 512, JSON_THROW_ON_ERROR);
 
-        return json_encode(self::apply($document, $patch), $encodeFlags | JSON_THROW_ON_ERROR);
+        // Decoded JSON is structurally valid and unaliased; skip apply()'s
+        // validating isolation pass.
+        return json_encode(self::mergeValue($document, $patch), $encodeFlags | JSON_THROW_ON_ERROR);
     }
 
     /**
