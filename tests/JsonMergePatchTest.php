@@ -147,11 +147,19 @@ class JsonMergePatchTest extends TestCase
         $result = JsonMergePatch::apply($document, $patch);
 
         self::assertInstanceOf(\stdClass::class, $result);
-        self::assertSame('new', $result->profile->name);
-        self::assertTrue($result->profile->keep);
+
+        $profile = $result->profile;
+        self::assertInstanceOf(\stdClass::class, $profile);
+        self::assertSame('new', $profile->name);
+        self::assertTrue($profile->keep);
         self::assertSame('old', $document->profile->name);
 
-        $result->rows[0]->name = 'mutated after apply';
+        $rows = $result->rows;
+        self::assertIsArray($rows);
+        $row = $rows[0];
+        self::assertInstanceOf(\stdClass::class, $row);
+
+        $row->name = 'mutated after apply';
 
         self::assertSame('stable', $document->rows[0]->name);
     }
@@ -172,8 +180,13 @@ class JsonMergePatchTest extends TestCase
 
         self::assertInstanceOf(\stdClass::class, $result);
 
-        $result->untouched->name = 'mutated after apply';
-        $result->added->name = 'mutated after apply';
+        $untouched = $result->untouched;
+        self::assertInstanceOf(\stdClass::class, $untouched);
+        $added = $result->added;
+        self::assertInstanceOf(\stdClass::class, $added);
+
+        $untouched->name = 'mutated after apply';
+        $added->name = 'mutated after apply';
 
         self::assertSame('stable', $document->untouched->name);
         self::assertSame('from patch', $patch->added->name);

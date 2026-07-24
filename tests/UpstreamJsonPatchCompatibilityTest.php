@@ -21,11 +21,17 @@ class UpstreamJsonPatchCompatibilityTest extends TestCase
      */
     public function testItPassesUpstreamJsonPatchTests(string $source, int $index, stdClass $case): void
     {
-        $label = sprintf('%s case %d: %s', $source, $index, $case->comment ?? 'unnamed');
+        $comment = $case->comment ?? 'unnamed';
+        self::assertIsString($comment);
+
+        $label = sprintf('%s case %d: %s', $source, $index, $comment);
+
+        $patch = $case->patch;
+        self::assertIsArray($patch, $label);
 
         if (property_exists($case, 'error')) {
             try {
-                JsonPatch::apply($case->doc, $case->patch);
+                JsonPatch::apply($case->doc, $patch);
             } catch (JsonPatchException $exception) {
                 self::assertNotSame('', $exception->getMessage(), $label);
 
@@ -35,7 +41,7 @@ class UpstreamJsonPatchCompatibilityTest extends TestCase
             self::fail($label . ' should have failed.');
         }
 
-        self::assertEquals($case->expected, JsonPatch::apply($case->doc, $case->patch), $label);
+        self::assertEquals($case->expected, JsonPatch::apply($case->doc, $patch), $label);
     }
 
     /**
