@@ -167,7 +167,9 @@ class JsonPatch
     private static function diffArray(array $source, array $target, string $path): array
     {
         $operations = [];
-        $sharedLength = min(count($source), count($target));
+        $sourceLength = count($source);
+        $targetLength = count($target);
+        $sharedLength = min($sourceLength, $targetLength);
 
         for ($index = 0; $index < $sharedLength; $index++) {
             array_push(
@@ -176,11 +178,11 @@ class JsonPatch
             );
         }
 
-        for ($index = count($source) - 1; $index >= count($target); $index--) {
+        for ($index = $sourceLength - 1; $index >= $targetLength; $index--) {
             $operations[] = self::removeOperation("{$path}/{$index}");
         }
 
-        for ($index = count($source); $index < count($target); $index++) {
+        for ($index = $sourceLength; $index < $targetLength; $index++) {
             $operations[] = self::addOperation("{$path}/-", $target[$index]);
         }
 
@@ -199,34 +201,34 @@ class JsonPatch
     {
         $sourceMembers = self::objectMembers($source);
         $targetMembers = self::objectMembers($target);
-        $operations = [];
+        $removeOperations = [];
+        $addOperations = [];
+        $memberOperations = [];
 
         foreach ($sourceMembers as $member => $value) {
             if (! array_key_exists($member, $targetMembers)) {
-                $operations[] = self::removeOperation($path . '/' . JsonPointer::escapeToken((string) $member));
-            }
-        }
-
-        foreach ($targetMembers as $member => $value) {
-            if (! array_key_exists($member, $sourceMembers)) {
-                $operations[] = self::addOperation($path . '/' . JsonPointer::escapeToken((string) $member), $value);
+                $removeOperations[] = self::removeOperation($path . '/' . JsonPointer::escapeToken((string) $member));
             }
         }
 
         foreach ($targetMembers as $member => $targetValue) {
-            if (array_key_exists($member, $sourceMembers)) {
-                array_push(
-                    $operations,
-                    ...self::diffValue(
-                        $sourceMembers[$member],
-                        $targetValue,
-                        $path . '/' . JsonPointer::escapeToken((string) $member),
-                    ),
-                );
+            if (! array_key_exists($member, $sourceMembers)) {
+                $addOperations[] = self::addOperation($path . '/' . JsonPointer::escapeToken((string) $member), $targetValue);
+
+                continue;
             }
+
+            array_push(
+                $memberOperations,
+                ...self::diffValue(
+                    $sourceMembers[$member],
+                    $targetValue,
+                    $path . '/' . JsonPointer::escapeToken((string) $member),
+                ),
+            );
         }
 
-        return $operations;
+        return [...$removeOperations, ...$addOperations, ...$memberOperations];
     }
 
     /**
@@ -800,16 +802,8 @@ class JsonPatch
             return self::arraysAreEqual($left, $right);
         }
 
-        if ($left instanceof stdClass && $right instanceof stdClass) {
-            return self::objectsAreEqual(get_object_vars($left), get_object_vars($right));
-        }
-
-        if ($left instanceof stdClass && is_array($right) && ! array_is_list($right)) {
-            return self::objectsAreEqual(get_object_vars($left), $right);
-        }
-
-        if (is_array($left) && ! array_is_list($left) && $right instanceof stdClass) {
-            return self::objectsAreEqual($left, get_object_vars($right));
+        if (self::isJsonObject($left) && self::isJsonObject($right)) {
+            return self::objectsAreEqual($left, $right);
         }
 
         return $left === $right;
@@ -864,21 +858,24 @@ class JsonPatch
     /**
      * Compares JSON object members without depending on member order.
      *
-     * @phpstan-param array<string|int, mixed> $left
-     * @phpstan-param array<string|int, mixed> $right
+     * @phpstan-param JsonObject $left
+     * @phpstan-param JsonObject $right
      */
-    private static function objectsAreEqual(array $left, array $right): bool
+    private static function objectsAreEqual(array|stdClass $left, array|stdClass $right): bool
     {
-        if (count($left) !== count($right)) {
+        $leftMembers = self::objectMembers($left);
+        $rightMembers = self::objectMembers($right);
+
+        if (count($leftMembers) !== count($rightMembers)) {
             return false;
         }
 
-        foreach ($left as $key => $value) {
-            if (! array_key_exists($key, $right)) {
+        foreach ($leftMembers as $member => $value) {
+            if (! array_key_exists($member, $rightMembers)) {
                 return false;
             }
 
-            if (! self::jsonValuesAreEqual($value, $right[$key])) {
+            if (! self::jsonValuesAreEqual($value, $rightMembers[$member])) {
                 return false;
             }
         }
