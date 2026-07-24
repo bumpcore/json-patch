@@ -565,4 +565,69 @@ class JsonPatchTest extends TestCase
             ['op' => 'test', 'path' => '', 'value' => (object) ['foo' => 'baz']],
         ]);
     }
+
+    /**
+     * Confirms mutating a returned document never writes through to the input document.
+     */
+    public function testItReturnsResultsThatDoNotShareObjectsWithTheInputDocument(): void
+    {
+        $document = (object) [
+            'touched' => (object) ['name' => 'original'],
+            'untouched' => (object) ['name' => 'stable'],
+        ];
+
+        $result = JsonPatch::apply($document, [
+            ['op' => 'replace', 'path' => '/touched/name', 'value' => 'changed'],
+        ]);
+
+        self::assertInstanceOf(stdClass::class, $result);
+
+        $result->untouched->name = 'mutated after apply';
+
+        self::assertSame('stable', $document->untouched->name);
+    }
+
+    /**
+     * Confirms the copy operation produces independent values inside the result.
+     */
+    public function testItCopiesValuesWithoutAliasingInsideTheResult(): void
+    {
+        $document = (object) [
+            'source' => (object) ['name' => 'original'],
+        ];
+
+        $result = JsonPatch::apply($document, [
+            ['op' => 'copy', 'from' => '/source', 'path' => '/duplicate'],
+        ]);
+
+        self::assertInstanceOf(stdClass::class, $result);
+
+        $result->duplicate->name = 'mutated copy';
+
+        self::assertSame('original', $result->source->name);
+    }
+
+    /**
+     * Confirms diffing deeply nested equal documents stays within linear memory.
+     */
+    public function testItDiffsDeeplyNestedEqualDocumentsWithoutQuadraticMemory(): void
+    {
+        $source = ['leaf' => 'end'];
+        $target = ['leaf' => 'end'];
+
+        for ($depth = 0; $depth < 400; $depth++) {
+            $source = ['child' => $source];
+            $target = ['child' => $target];
+        }
+
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $patch = JsonPatch::diff($source, $target);
+
+        $peakBytes = memory_get_peak_usage() - $before;
+
+        self::assertSame([], $patch);
+        self::assertLessThan(16 * 1048576, $peakBytes);
+    }
 }

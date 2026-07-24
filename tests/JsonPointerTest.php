@@ -288,6 +288,25 @@ class JsonPointerTest extends TestCase
 
         JsonPointer::set([], '', INF);
     }
+
+    /**
+     * Confirms mutating a returned document never writes through to the input document.
+     */
+    public function testItSetsValuesWithoutSharingObjectsBetweenInputAndResult(): void
+    {
+        $document = (object) [
+            'touched' => (object) ['name' => 'original'],
+            'untouched' => (object) ['name' => 'stable'],
+        ];
+
+        $result = JsonPointer::set($document, '/touched/name', 'changed');
+
+        self::assertInstanceOf(stdClass::class, $result);
+
+        $result->untouched->name = 'mutated after set';
+
+        self::assertSame('stable', $document->untouched->name);
+    }
 }
 
 /**

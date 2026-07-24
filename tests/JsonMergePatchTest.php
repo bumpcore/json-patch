@@ -128,4 +128,27 @@ class JsonMergePatchTest extends TestCase
         yield 'replace array target with object patch' => ['[1,2]', '{"a":"b","c":null}', '{"a":"b"}'];
         yield 'remove absent nested null' => ['{}', '{"a":{"bb":{"ccc":null}}}', '{"a":{"bb":{}}}'];
     }
+
+    /**
+     * Confirms mutating a returned document never writes through to either input.
+     */
+    public function testItReturnsResultsThatDoNotShareObjectsWithInputs(): void
+    {
+        $document = (object) [
+            'untouched' => (object) ['name' => 'stable'],
+        ];
+        $patch = (object) [
+            'added' => (object) ['name' => 'from patch'],
+        ];
+
+        $result = JsonMergePatch::apply($document, $patch);
+
+        self::assertInstanceOf(\stdClass::class, $result);
+
+        $result->untouched->name = 'mutated after apply';
+        $result->added->name = 'mutated after apply';
+
+        self::assertSame('stable', $document->untouched->name);
+        self::assertSame('from patch', $patch->added->name);
+    }
 }
