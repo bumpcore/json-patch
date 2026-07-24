@@ -700,7 +700,11 @@ class JsonPatch
      */
     private static function arrayIndex(string $token): int
     {
-        if (preg_match('/^(0|[1-9][0-9]*)$/', $token) !== 1) {
+        if ($token === '0') {
+            return 0;
+        }
+
+        if ($token === '' || $token[0] === '0' || ! ctype_digit($token)) {
             throw new JsonPointerException('Array index must be a non-negative integer without leading zeros.');
         }
 
