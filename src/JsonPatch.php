@@ -71,7 +71,26 @@ class JsonPatch
             throw new InvalidPatchException('A JSON Patch document must decode to an array.');
         }
 
-        return json_encode(self::apply($document, $patch), $encodeFlags | JSON_THROW_ON_ERROR);
+        return json_encode(self::applyDecoded($document, $patch), $encodeFlags | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Applies patch operations to a freshly decoded document.
+     *
+     * Decoded JSON cannot contain non-JSON values and is referenced by nobody
+     * else, so the validating isolation pass of apply() is unnecessary.
+     *
+     * @param array<mixed> $patch
+     */
+    private static function applyDecoded(mixed $document, array $patch): mixed
+    {
+        $workingDocument = $document;
+
+        foreach (self::patchOperations($patch) as $index => $operation) {
+            $workingDocument = self::applyOperation($workingDocument, $operation, $index);
+        }
+
+        return $workingDocument;
     }
 
     /**
@@ -106,7 +125,7 @@ class JsonPatch
         $source = json_decode($sourceJson, false, 512, JSON_THROW_ON_ERROR);
         $target = json_decode($targetJson, false, 512, JSON_THROW_ON_ERROR);
 
-        return json_encode(self::diff($source, $target), $encodeFlags | JSON_THROW_ON_ERROR);
+        return json_encode(self::diffValue($source, $target, ''), $encodeFlags | JSON_THROW_ON_ERROR);
     }
 
     /**
