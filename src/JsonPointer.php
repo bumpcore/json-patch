@@ -350,7 +350,7 @@ class JsonPointer
             throw new JsonPointerException('"-" does not reference an existing array value.');
         }
 
-        if ($token !== '0' && ($token === '' || $token[0] === '0' || ! ctype_digit($token))) {
+        if ($token !== '0' && ($token === '' || $token[0] === '0' || strspn($token, '0123456789') !== strlen($token))) {
             throw new JsonPointerException('Array index must be a non-negative integer without leading zeros.');
         }
 
