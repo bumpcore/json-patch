@@ -567,6 +567,39 @@ class JsonPatchTest extends TestCase
     }
 
     /**
+     * Confirms diff treats numerically equal leaves as equal without operations.
+     */
+    public function testItGeneratesAnEmptyPatchForNumericallyEqualLeaves(): void
+    {
+        self::assertSame([], JsonPatch::diff([1], [1.0]));
+    }
+
+    /**
+     * Confirms diff rejects non-finite numbers in its inputs.
+     */
+    public function testItRejectsNonFiniteNumbersInDiffInputs(): void
+    {
+        $this->expectException(InvalidPatchException::class);
+        $this->expectExceptionMessage('finite');
+
+        JsonPatch::diff(['value' => INF], ['value' => 1]);
+    }
+
+    /**
+     * Confirms diff rejects unsupported values in its inputs.
+     */
+    public function testItRejectsUnsupportedValuesInDiffInputs(): void
+    {
+        $resource = fopen('php://memory', 'rb');
+        self::assertIsResource($resource);
+
+        $this->expectException(InvalidPatchException::class);
+        $this->expectExceptionMessage('Unsupported JSON value');
+
+        JsonPatch::diff(['ok' => true], ['bad' => $resource]);
+    }
+
+    /**
      * Confirms mutating a returned document never writes through to the input document.
      */
     public function testItReturnsResultsThatDoNotShareObjectsWithTheInputDocument(): void

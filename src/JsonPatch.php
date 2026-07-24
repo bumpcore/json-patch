@@ -706,7 +706,7 @@ class JsonPatch
             return 0;
         }
 
-        if ($token === '' || $token[0] === '0' || ! ctype_digit($token)) {
+        if ($token === '' || $token[0] === '0' || strspn($token, '0123456789') !== strlen($token)) {
             throw new JsonPointerException('Array index must be a non-negative integer without leading zeros.');
         }
 

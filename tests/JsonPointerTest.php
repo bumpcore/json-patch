@@ -290,6 +290,43 @@ class JsonPointerTest extends TestCase
     }
 
     /**
+     * Confirms existence checks validate object targets recursively.
+     */
+    public function testItReportsExistenceForObjectTargets(): void
+    {
+        $document = (object) [
+            'config' => (object) ['nested' => (object) ['flag' => true]],
+        ];
+
+        self::assertTrue(JsonPointer::has($document, '/config'));
+    }
+
+    /**
+     * Confirms existence checks reject non-finite numbers at the target.
+     */
+    public function testItRejectsNonFiniteNumbersInExistenceChecks(): void
+    {
+        $this->expectException(InvalidPatchException::class);
+        $this->expectExceptionMessage('finite');
+
+        JsonPointer::has(['bad' => INF], '/bad');
+    }
+
+    /**
+     * Confirms existence checks reject unsupported values at the target.
+     */
+    public function testItRejectsUnsupportedValuesInExistenceChecks(): void
+    {
+        $resource = fopen('php://memory', 'rb');
+        self::assertIsResource($resource);
+
+        $this->expectException(InvalidPatchException::class);
+        $this->expectExceptionMessage('Unsupported JSON value');
+
+        JsonPointer::has(['bad' => $resource], '/bad');
+    }
+
+    /**
      * Confirms mutating a returned document never writes through to the input document.
      */
     public function testItSetsValuesWithoutSharingObjectsBetweenInputAndResult(): void

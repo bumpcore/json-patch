@@ -130,6 +130,33 @@ class JsonMergePatchTest extends TestCase
     }
 
     /**
+     * Confirms merges read existing object members and detach array-nested objects.
+     */
+    public function testItMergesIntoExistingObjectMembersWithoutSharing(): void
+    {
+        $document = (object) [
+            'profile' => (object) ['name' => 'old', 'keep' => true],
+            'rows' => [
+                (object) ['name' => 'stable'],
+            ],
+        ];
+        $patch = (object) [
+            'profile' => (object) ['name' => 'new'],
+        ];
+
+        $result = JsonMergePatch::apply($document, $patch);
+
+        self::assertInstanceOf(\stdClass::class, $result);
+        self::assertSame('new', $result->profile->name);
+        self::assertTrue($result->profile->keep);
+        self::assertSame('old', $document->profile->name);
+
+        $result->rows[0]->name = 'mutated after apply';
+
+        self::assertSame('stable', $document->rows[0]->name);
+    }
+
+    /**
      * Confirms mutating a returned document never writes through to either input.
      */
     public function testItReturnsResultsThatDoNotShareObjectsWithInputs(): void
