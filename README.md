@@ -1,6 +1,6 @@
-# BumpCore JSON Patch
+# bumpcore JSON Patch
 
-BumpCore JSON Patch is a dependency-free PHP package for working with JSON
+bumpcore JSON Patch is a dependency-free PHP package for working with JSON
 change documents. It supports RFC 6902 JSON Patch, RFC 7396 JSON Merge Patch,
 and RFC 6901 JSON Pointer.
 
@@ -30,7 +30,7 @@ errors to API clients.
 
 ## Version Table
 
-| BumpCore JSON Patch | PHP  |
+| bumpcore JSON Patch | PHP  |
 |---------------------|------|
 | 0.x                 | ^8.3 |
 
